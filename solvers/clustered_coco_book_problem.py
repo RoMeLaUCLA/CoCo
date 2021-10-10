@@ -29,6 +29,10 @@ import collections
 import pdb
 
 
+list_features = ['item_center_x_stored', 'item_center_y_stored', 'item_angle_stored',
+                 'item_width_stored', 'item_height_stored', 'item_width_in_hand', 'item_height_in_hand']
+
+
 class CoCo(Solver):
     def __init__(self, system, problem, prob_features, n_evals=1):
         """Constructor for CoCo class.
@@ -76,10 +80,7 @@ class CoCo(Solver):
         self.features = np.zeros((num_probs, self.n_features))
         for iter_prob in range(num_probs):
             self.features[iter_prob, :] = \
-                np.hstack((features['item_center_x_stored'][iter_prob], features['item_center_y_stored'][iter_prob],
-                           features['item_angle_stored'][iter_prob],
-                           features['item_width_stored'][iter_prob], features['item_height_stored'][iter_prob],
-                           features['item_width_in_hand'][iter_prob], features['item_height_in_hand'][iter_prob]))
+                np.hstack((features[iter_feature][iter_prob] for iter_feature in list_features))
 
         self.labels = np.zeros((num_probs, 1+self.n_y))
         self.n_strategies = 0
@@ -378,10 +379,7 @@ class CoCo(Solver):
         # Multiple samples for VAE, RF
         # Mode 2
 
-        feature_input = np.hstack((features['item_center_x_stored'], features['item_center_y_stored'],
-                                   features['item_angle_stored'],
-                                   features['item_width_stored'], features['item_height_stored'],
-                                   features['item_width_in_hand'], features['item_height_in_hand']))
+        feature_input = np.hstack((features[iter_feature] for iter_feature in list_features))
 
         print("Feature is:")
         print(feature_input)
@@ -679,10 +677,7 @@ class CoCo(Solver):
 
     def forward_book_VAE(self, prob_params, features, iter_data, num_trials, folder_name):  # I only have Gurobi solver
 
-        feature_input = np.hstack((features['item_center_x_stored'], features['item_center_y_stored'],
-                                   features['item_angle_stored'],
-                                   features['item_width_stored'], features['item_height_stored'],
-                                   features['item_width_in_hand'], features['item_height_in_hand']))
+        feature_input = np.hstack((features[iter_feature] for iter_feature in list_features))
 
         print("Feature is:")
         print(feature_input)
@@ -768,10 +763,7 @@ class CoCo(Solver):
 
     def forward_book_random_forest(self, prob_params, features, iter_data, num_trials, folder_name):  # I only have Gurobi solver
 
-        feature_input = np.hstack((features['item_center_x_stored'], features['item_center_y_stored'],
-                                   features['item_angle_stored'],
-                                   features['item_width_stored'], features['item_height_stored'],
-                                   features['item_width_in_hand'], features['item_height_in_hand']))
+        feature_input = np.hstack((features[iter_feature] for iter_feature in list_features))
 
         print("Feature is:")
         print(feature_input)
