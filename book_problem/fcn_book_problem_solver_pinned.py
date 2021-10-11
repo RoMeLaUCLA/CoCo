@@ -20,10 +20,17 @@ import math, time, runpy, pickle
 # right 0, 1, 2, 3, 4, 5, etc
 
 
-def fcn_book_problem_clustered_solver_pinned(bin_width, bin_height, bin_left, bin_right, bin_ground, bin_up, v_bin, num_of_item, item_width_stored,
+def fcn_book_problem_clustered_solver_pinned(shelf_geometry, num_of_item, item_width_stored,
                     item_height_stored, item_center_stored, item_angle_stored, item_width_in_hand, item_height_in_hand,
                             y_guess_all, iter_data, folder_name):
 
+    bin_width = shelf_geometry.shelf_width
+    bin_height = shelf_geometry.shelf_height
+    bin_left = shelf_geometry.shelf_left
+    bin_right = shelf_geometry.shelf_right
+    bin_ground = shelf_geometry.shelf_ground
+    bin_up = shelf_geometry.shelf_up
+    v_bin = shelf_geometry.v_bin
 
     init_globals = {'num_of_item': num_of_item, 'bin_width': bin_width, 'bin_height': bin_height, 'item_width_stored': item_width_stored}
     ret_dict = runpy.run_module('setup_variable_range', init_globals=init_globals)

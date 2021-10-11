@@ -24,6 +24,7 @@ from pytorch.vae import VAE
 from sklearn.ensemble import RandomForestClassifier
 from fcn_book_problem_solver_pinned import fcn_book_problem_clustered_solver_pinned
 from bookshelf_generator import main as bin_generation_main
+from book_problem_classes import ShelfGeometry
 import random
 import collections
 import pdb
@@ -430,15 +431,7 @@ class CoCo(Solver):
         bin_height = prob_params['bin_height']
         num_of_item = prob_params['num_of_item']
 
-        bin_left = -bin_width / 2.0
-        bin_right = bin_width / 2.0
-        bin_ground = 0.0
-        bin_up = bin_height
-
-        v_bin = np.array([[bin_right, bin_up],
-                          [bin_right, bin_ground],
-                          [bin_left, bin_ground],
-                          [bin_left, bin_up]])
+        inst_shelf_geometry = ShelfGeometry(shelf_width=bin_width, shelf_height=bin_height)
 
         item_width_stored = features['item_width_stored']
         item_height_stored = features['item_height_stored']
@@ -453,9 +446,7 @@ class CoCo(Solver):
         y_guess_all = y_guesses
 
         begin_time = time.time()
-        prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(bin_width, bin_height,
-                                                                                           bin_left, bin_right,
-                                                                                           bin_ground, bin_up, v_bin,
+        prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
                                                                                            num_of_item,
                                                                                            item_width_stored,
                                                                                            item_height_stored,
@@ -504,20 +495,9 @@ class CoCo(Solver):
 
         new_data = bin_generation_main(num_shelves)
 
-        bin_width = new_data[-1][0]
-        bin_height = new_data[-1][1]
+        inst_shelf_geometry = new_data[0]["after"]["shelf"].shelf_geometry
 
-        bin_left = -bin_width / 2.0
-        bin_right = bin_width / 2.0
-        bin_ground = 0.0
-        bin_up = bin_height
-
-        v_bin = np.array([[bin_right, bin_up],
-                          [bin_right, bin_ground],
-                          [bin_left, bin_ground],
-                          [bin_left, bin_up]])
-
-        num_of_item = 3
+        num_of_item_stored = new_data[0]["after"]["shelf"].num_of_item
 
         list_prob_success = []
         list_cost = []
@@ -525,75 +505,29 @@ class CoCo(Solver):
         list_n_evals = []
         list_optvals = []
 
-        # TODO: also make the following function an utility function
-        for iter_data in range(int((len(new_data) - 1) / 2)):
+        for iter_data in range(len(new_data)):
 
             print("############################################################## Data number {} ##############################################################".format(iter_data))
 
-            iter_1 = 2 * iter_data
-            iter_2 = 2 * iter_data + 1
-
-            mask_o = new_data[iter_2]['image']
-            mask = np.zeros(np.shape(mask_o))
-            for iter_row in range(np.shape(mask_o)[0]):
-                for iter_column in range(np.shape(mask_o)[1]):
-                    mask[iter_row, iter_column] = mask_o[iter_row, iter_column]
-
-            item_center_stored = []
-            item_angle_stored = []
-            item_width_stored = []
-            item_height_stored = []
-            vertices = []
-            width_in_hand = 0.0
-            height_in_hand = 0.0
-            this_feature = []
-
-            iterr = iter_2
-
-            remove = new_data[iterr]['remove']
-            item_width_in_hand = new_data[iter_1]['boxes'][remove][3][0]
-            item_height_in_hand = new_data[iter_1]['boxes'][remove][3][1]
-
-            for iter_box in range(len(new_data[iterr]['boxes'])):  # iterr == iter_2, does not include item-in-hand
-
-                # Note horizontally flipped
-                center_pt = [0 - (bin_width / 2.0 - new_data[iterr]['boxes'][iter_box][0]),
-                             bin_height - new_data[iterr]['boxes'][iter_box][1] - 7]
-                ang_pt = -new_data[iterr]['boxes'][iter_box][2]
-                R_bw_pt = np.array([[np.cos(ang_pt), -np.sin(ang_pt)],
-                                    [np.sin(ang_pt), np.cos(ang_pt)]])
-
-                size = np.array([new_data[iterr]['boxes'][iter_box][3][1], new_data[iterr]['boxes'][iter_box][3][0]])
-                # First height (size[0] = [3][1]), then width (size[1] = [3][0])
-
-                if iterr == iter_2:
-                    item_center_stored.append(center_pt)
-                    item_angle_stored.append(ang_pt)
-                    item_width_stored.append(new_data[iterr]['boxes'][iter_box][3][0])
-                    item_height_stored.append(new_data[iterr]['boxes'][iter_box][3][1])
-                    vv = get_vertices(center_pt, R_bw_pt, size)
-                    vertices.append(vv)
-
-                    this_feature.extend([center_pt[0], center_pt[1], ang_pt, size[0], size[1]])
-
-            this_feature.extend([item_height_in_hand, item_width_in_hand])
+            this_shelf = new_data[iter_data]["after"]["shelf"]
+            this_feature = this_shelf.return_flat_feature()
 
             assert len(this_feature) == 17, "Inconsistent feature length !!"
 
-            feat_item_width_stored = np.array([this_feature[5 * iter_item + 4] for iter_item in range(num_of_item)])
-            feat_item_height_stored = np.array([this_feature[5 * iter_item + 3] for iter_item in range(num_of_item)])
-            feat_item_center_x_stored = np.array([this_feature[5 * iter_item + 0] for iter_item in range(num_of_item)])
-            feat_item_center_y_stored = np.array([this_feature[5 * iter_item + 1] for iter_item in range(num_of_item)])
-            feat_item_angle_stored = np.array([this_feature[5 * iter_item + 2] for iter_item in range(num_of_item)])
-            feat_item_height_in_hand = this_feature[15]
-            feat_item_width_in_hand = this_feature[16]
+            feat_width_stored = this_shelf.return_stored_item_widths()
+            feat_height_stored = this_shelf.return_stored_item_heights()
+            feat_center_x_stored = this_shelf.return_stored_item_center_x()
+            feat_center_y_stored = this_shelf.return_stored_item_center_y()
+            feat_angle_stored = this_shelf.return_stored_item_angles()
+            feat_height_in_hand = this_shelf.item_height_in_hand
+            feat_width_in_hand = this_shelf.item_width_in_hand
 
-            feature_input = np.array([feat_item_center_x_stored[0], feat_item_center_x_stored[1], feat_item_center_x_stored[2],
-                                      feat_item_center_y_stored[0], feat_item_center_y_stored[1], feat_item_center_y_stored[2],
-                                      feat_item_angle_stored[0], feat_item_angle_stored[1], feat_item_angle_stored[2],
-                                      feat_item_width_stored[0], feat_item_width_stored[1], feat_item_width_stored[2],
-                                      feat_item_height_stored[0], feat_item_height_stored[1], feat_item_height_stored[2],
-                                      feat_item_width_in_hand, feat_item_height_in_hand])
+            feature_input = np.array([feat_center_x_stored[0], feat_center_x_stored[1], feat_center_x_stored[2],
+                                      feat_center_y_stored[0], feat_center_y_stored[1], feat_center_y_stored[2],
+                                      feat_angle_stored[0], feat_angle_stored[1], feat_angle_stored[2],
+                                      feat_width_stored[0], feat_width_stored[1], feat_width_stored[2],
+                                      feat_height_stored[0], feat_height_stored[1], feat_height_stored[2],
+                                      feat_width_in_hand, feat_height_in_hand])
 
             print("Feature is:")
             print(feature_input)
@@ -636,23 +570,21 @@ class CoCo(Solver):
 
             prob_success, cost, n_evals, optvals = False, np.Inf, len(y_guesses), None
 
-            item_width_stored = feat_item_width_stored
-            item_height_stored = feat_item_height_stored
-            x_stored = feat_item_center_x_stored
-            y_stored = feat_item_center_y_stored
+            item_width_stored = feat_width_stored
+            item_height_stored = feat_height_stored
+            x_stored = feat_center_x_stored
+            y_stored = feat_center_y_stored
             item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
-                                           for iter_item in range(num_of_item)])  # Make item center 2D
-            item_angle_stored = feat_item_angle_stored
-            item_width_in_hand = feat_item_width_in_hand
-            item_height_in_hand = feat_item_height_in_hand
+                                           for iter_item in range(num_of_item_stored)])  # Make item center 2D
+            item_angle_stored = feat_angle_stored
+            item_width_in_hand = feat_width_in_hand
+            item_height_in_hand = feat_height_in_hand
 
             y_guess_all = y_guesses
 
             begin_time = time.time()
-            prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(bin_width, bin_height,
-                                                                                               bin_left, bin_right,
-                                                                                               bin_ground, bin_up, v_bin,
-                                                                                               num_of_item,
+            prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
+                                                                                               num_of_item_stored,
                                                                                                item_width_stored,
                                                                                                item_height_stored,
                                                                                                item_center_stored,
@@ -718,15 +650,7 @@ class CoCo(Solver):
             bin_height = prob_params['bin_height']
             num_of_item = prob_params['num_of_item']
 
-            bin_left = -bin_width / 2.0
-            bin_right = bin_width / 2.0
-            bin_ground = 0.0
-            bin_up = bin_height
-
-            v_bin = np.array([[bin_right, bin_up],
-                              [bin_right, bin_ground],
-                              [bin_left, bin_ground],
-                              [bin_left, bin_up]])
+            inst_shelf_geometry = ShelfGeometry(shelf_width=bin_width, shelf_height=bin_height)
 
             item_width_stored = features['item_width_stored']
             item_height_stored = features['item_height_stored']
@@ -746,8 +670,8 @@ class CoCo(Solver):
             optvals = 0
 
             try:
-                prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(bin_width, bin_height,
-                    bin_left, bin_right, bin_ground, bin_up, v_bin, num_of_item, item_width_stored, item_height_stored,
+                prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
+                    num_of_item, item_width_stored, item_height_stored,
                     item_center_stored, item_angle_stored, item_width_in_hand, item_height_in_hand, y_guess, iter_data, folder_name)
             except:
                 pass
@@ -820,15 +744,7 @@ class CoCo(Solver):
         bin_height = prob_params['bin_height']
         num_of_item = prob_params['num_of_item']
 
-        bin_left = -bin_width / 2.0
-        bin_right = bin_width / 2.0
-        bin_ground = 0.0
-        bin_up = bin_height
-
-        v_bin = np.array([[bin_right, bin_up],
-                          [bin_right, bin_ground],
-                          [bin_left, bin_ground],
-                          [bin_left, bin_up]])
+        inst_shelf_geometry = ShelfGeometry(shelf_width=bin_width, shelf_height=bin_height)
 
         item_width_stored = features['item_width_stored']
         item_height_stored = features['item_height_stored']
@@ -843,9 +759,7 @@ class CoCo(Solver):
         y_guess_all = y_guesses
 
         begin_time = time.time()
-        prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(bin_width, bin_height,
-                                                                                           bin_left, bin_right,
-                                                                                           bin_ground, bin_up, v_bin,
+        prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
                                                                                            num_of_item,
                                                                                            item_width_stored,
                                                                                            item_height_stored,
