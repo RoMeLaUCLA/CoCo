@@ -20,9 +20,7 @@ import math, time, runpy, pickle
 # right 0, 1, 2, 3, 4, 5, etc
 
 
-def fcn_book_problem_clustered_solver_pinned(shelf_geometry, num_of_item, item_width_stored,
-                    item_height_stored, item_center_stored, item_angle_stored, item_width_in_hand, item_height_in_hand,
-                            y_guess_all, iter_data, folder_name):
+def fcn_book_problem_clustered_solver_pinned(shelf_geometry, num_of_item, feature_in, y_guess_all, iter_data, folder_name):
 
     bin_width = shelf_geometry.shelf_width
     bin_height = shelf_geometry.shelf_height
@@ -31,6 +29,17 @@ def fcn_book_problem_clustered_solver_pinned(shelf_geometry, num_of_item, item_w
     bin_ground = shelf_geometry.shelf_ground
     bin_up = shelf_geometry.shelf_up
     v_bin = shelf_geometry.v_bin
+
+    feature_flatten = feature_in.flatten_to_dictionary()
+    item_width_stored = feature_flatten['item_width_stored']
+    item_height_stored = feature_flatten['item_height_stored']
+    x_stored = feature_flatten['item_center_x_stored']
+    y_stored = feature_flatten['item_center_y_stored']
+    item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
+                                   for iter_item in range(num_of_item)])
+    item_angle_stored = feature_flatten['item_angle_stored']
+    item_width_in_hand = feature_flatten['item_width_in_hand']
+    item_height_in_hand = feature_flatten['item_height_in_hand']
 
     init_globals = {'num_of_item': num_of_item, 'bin_width': bin_width, 'bin_height': bin_height, 'item_width_stored': item_width_stored}
     ret_dict = runpy.run_module('setup_variable_range', init_globals=init_globals)

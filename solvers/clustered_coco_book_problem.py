@@ -17,7 +17,6 @@ sys.path.insert(1, os.path.join(os.environ['PWD'], 'pytorch'))
 sys.path.insert(1, os.path.join(os.environ['PWD'], 'book_problem'))
 sys.path.insert(1, os.path.join(os.path.dirname(os.environ['PWD']), 'bookshelf_generator'))
 sys.path.insert(1, os.path.join(os.path.dirname(os.environ['PWD']), 'utils'))
-from get_vertices import get_vertices
 from core import Problem, Solver
 from pytorch.models import FFNet
 from pytorch.vae import VAE
@@ -28,10 +27,6 @@ from book_problem_classes import ShelfGeometry
 import random
 import collections
 import pdb
-
-
-list_features = ['item_center_x_stored', 'item_center_y_stored', 'item_angle_stored',
-                 'item_width_stored', 'item_height_stored', 'item_width_in_hand', 'item_height_in_hand']
 
 
 class CoCo(Solver):
@@ -80,8 +75,9 @@ class CoCo(Solver):
 
         self.features = np.zeros((num_probs, self.n_features))
         for iter_prob in range(num_probs):
-            self.features[iter_prob, :] = \
-                np.hstack((features[iter_feature][iter_prob] for iter_feature in list_features))
+            ff = features[iter_prob].flatten()
+            assert self.n_features == len(ff), "From construct strategies: Inconsistent length of feature vector !!"
+            self.features[iter_prob, :] = np.array(ff)
 
         self.labels = np.zeros((num_probs, 1+self.n_y))
         self.n_strategies = 0
@@ -374,13 +370,11 @@ class CoCo(Solver):
     def forward(self, features, solver=cp.GUROBI):  # I only have Gurobi solver
         print("Error: This should not be used !!")
 
-    def forward_book(self, prob_params, features, iter_data, num_trials, random_baseline, folder_name):  # I only have Gurobi solver
+    def forward_book(self, prob_params, features, iter_data, num_trials, random_baseline, folder_name):
 
         # TODO: See if the proposed policy makes sense - looks like just some error that causes infeasibility
-        # Multiple samples for VAE, RF
-        # Mode 2
 
-        feature_input = np.hstack((features[iter_feature] for iter_feature in list_features))
+        feature_input = np.array(features.flatten())
 
         print("Feature is:")
         print(feature_input)
@@ -433,61 +427,18 @@ class CoCo(Solver):
 
         inst_shelf_geometry = ShelfGeometry(shelf_width=bin_width, shelf_height=bin_height)
 
-        item_width_stored = features['item_width_stored']
-        item_height_stored = features['item_height_stored']
-        x_stored = features['item_center_x_stored']
-        y_stored = features['item_center_y_stored']
-        item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
-                                       for iter_item in range(num_of_item)])  # Make item center 2D
-        item_angle_stored = features['item_angle_stored']
-        item_width_in_hand = features['item_width_in_hand']
-        item_height_in_hand = features['item_height_in_hand']
-
         y_guess_all = y_guesses
 
         begin_time = time.time()
         prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
                                                                                            num_of_item,
-                                                                                           item_width_stored,
-                                                                                           item_height_stored,
-                                                                                           item_center_stored,
-                                                                                           item_angle_stored,
-                                                                                           item_width_in_hand,
-                                                                                           item_height_in_hand,
+                                                                                           features,
                                                                                            y_guess_all,
                                                                                            iter_data, folder_name)
 
         pass_time_with_runpy = time.time() - begin_time
         print("success? {}".format(prob_success))
         total_time = solve_time + time_NN
-
-        # # Begin: multiple setup
-        # for ii, idx in enumerate(ind_max):
-        #     print("====================== Running iteration {} =====================".format(ii))
-        #
-        #     y_guess = y_guesses[ii]
-        #
-        #     print("y guesses:")
-        #     print(y_guess)
-        #
-        #     # self.print_policy_choice(y_guess, num_of_item=3)
-        #     # prob_success = False
-        #     # cost = 0
-        #     # optvals = 0
-        #
-        #     # try:
-        #     prob_success, cost, solve_time, optvals = fcn_mode_clustered_solver_pinned(bin_width, bin_height,
-        #         bin_left, bin_right, bin_ground, bin_up, v_bin, num_of_item, item_width_stored, item_height_stored,
-        #         item_center_stored, item_angle_stored, item_width_in_hand, item_height_in_hand, y_guess, iter_data, folder_name)
-        #     # except:
-        #     #     pass
-        #
-        #     print("success? {}".format(prob_success))
-        #     total_time += solve_time
-        #     n_evals = ii+1
-        #     if prob_success:
-        #         break
-        # # End: multiple setup
 
         return prob_success, cost, total_time, n_evals, optvals
 
@@ -507,27 +458,11 @@ class CoCo(Solver):
 
         for iter_data in range(len(new_data)):
 
-            print("############################################################## Data number {} ##############################################################".format(iter_data))
+            print("###################################### Data number {} ######################################".format(iter_data))
 
             this_shelf = new_data[iter_data]["after"]["shelf"]
-            this_feature = this_shelf.return_flat_feature()
-
-            assert len(this_feature) == 17, "Inconsistent feature length !!"
-
-            feat_width_stored = this_shelf.return_stored_item_widths()
-            feat_height_stored = this_shelf.return_stored_item_heights()
-            feat_center_x_stored = this_shelf.return_stored_item_center_x()
-            feat_center_y_stored = this_shelf.return_stored_item_center_y()
-            feat_angle_stored = this_shelf.return_stored_item_angles()
-            feat_height_in_hand = this_shelf.item_height_in_hand
-            feat_width_in_hand = this_shelf.item_width_in_hand
-
-            feature_input = np.array([feat_center_x_stored[0], feat_center_x_stored[1], feat_center_x_stored[2],
-                                      feat_center_y_stored[0], feat_center_y_stored[1], feat_center_y_stored[2],
-                                      feat_angle_stored[0], feat_angle_stored[1], feat_angle_stored[2],
-                                      feat_width_stored[0], feat_width_stored[1], feat_width_stored[2],
-                                      feat_height_stored[0], feat_height_stored[1], feat_height_stored[2],
-                                      feat_width_in_hand, feat_height_in_hand])
+            feature = this_shelf.return_feature()
+            feature_input = np.array(feature.flatten())
 
             print("Feature is:")
             print(feature_input)
@@ -570,27 +505,12 @@ class CoCo(Solver):
 
             prob_success, cost, n_evals, optvals = False, np.Inf, len(y_guesses), None
 
-            item_width_stored = feat_width_stored
-            item_height_stored = feat_height_stored
-            x_stored = feat_center_x_stored
-            y_stored = feat_center_y_stored
-            item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
-                                           for iter_item in range(num_of_item_stored)])  # Make item center 2D
-            item_angle_stored = feat_angle_stored
-            item_width_in_hand = feat_width_in_hand
-            item_height_in_hand = feat_height_in_hand
-
             y_guess_all = y_guesses
 
             begin_time = time.time()
             prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
                                                                                                num_of_item_stored,
-                                                                                               item_width_stored,
-                                                                                               item_height_stored,
-                                                                                               item_center_stored,
-                                                                                               item_angle_stored,
-                                                                                               item_width_in_hand,
-                                                                                               item_height_in_hand,
+                                                                                               feature,
                                                                                                y_guess_all,
                                                                                                iter_data, folder_name)
 
@@ -607,9 +527,9 @@ class CoCo(Solver):
         return list_prob_success, list_cost, list_total_time, list_n_evals, list_optvals
 
 
-    def forward_book_VAE(self, prob_params, features, iter_data, num_trials, folder_name):  # I only have Gurobi solver
+    def forward_book_VAE(self, prob_params, features, iter_data, num_trials, folder_name):
 
-        feature_input = np.hstack((features[iter_feature] for iter_feature in list_features))
+        feature_input = np.array(features.flatten())
 
         print("Feature is:")
         print(feature_input)
@@ -652,27 +572,13 @@ class CoCo(Solver):
 
             inst_shelf_geometry = ShelfGeometry(shelf_width=bin_width, shelf_height=bin_height)
 
-            item_width_stored = features['item_width_stored']
-            item_height_stored = features['item_height_stored']
-            x_stored = features['item_center_x_stored']
-            y_stored = features['item_center_y_stored']
-            item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
-                                           for iter_item in range(num_of_item)])  # Make item center 2D
-            print("Please make sure this item_center_stored is correct !!")
-            print(item_center_stored)
-            pdb.set_trace()
-            item_angle_stored = features['item_angle_stored']
-            item_width_in_hand = features['item_width_in_hand']
-            item_height_in_hand = features['item_height_in_hand']
-
             prob_success = False
             cost = 0
             optvals = 0
 
             try:
                 prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
-                    num_of_item, item_width_stored, item_height_stored,
-                    item_center_stored, item_angle_stored, item_width_in_hand, item_height_in_hand, y_guess, iter_data, folder_name)
+                    num_of_item, features, y_guess, iter_data, folder_name)
             except:
                 pass
 
@@ -685,9 +591,9 @@ class CoCo(Solver):
         return prob_success, cost, total_time, n_evals, optvals
 
 
-    def forward_book_random_forest(self, prob_params, features, iter_data, num_trials, folder_name):  # I only have Gurobi solver
+    def forward_book_random_forest(self, prob_params, features, iter_data, num_trials, folder_name):
 
-        feature_input = np.hstack((features[iter_feature] for iter_feature in list_features))
+        feature_input = np.array(features.flatten())
 
         print("Feature is:")
         print(feature_input)
@@ -746,27 +652,12 @@ class CoCo(Solver):
 
         inst_shelf_geometry = ShelfGeometry(shelf_width=bin_width, shelf_height=bin_height)
 
-        item_width_stored = features['item_width_stored']
-        item_height_stored = features['item_height_stored']
-        x_stored = features['item_center_x_stored']
-        y_stored = features['item_center_y_stored']
-        item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
-                                       for iter_item in range(num_of_item)])  # Make item center 2D
-        item_angle_stored = features['item_angle_stored']
-        item_width_in_hand = features['item_width_in_hand']
-        item_height_in_hand = features['item_height_in_hand']
-
         y_guess_all = y_guesses
 
         begin_time = time.time()
         prob_success, cost, solve_time, optvals = fcn_book_problem_clustered_solver_pinned(inst_shelf_geometry,
                                                                                            num_of_item,
-                                                                                           item_width_stored,
-                                                                                           item_height_stored,
-                                                                                           item_center_stored,
-                                                                                           item_angle_stored,
-                                                                                           item_width_in_hand,
-                                                                                           item_height_in_hand,
+                                                                                           features,
                                                                                            y_guess_all,
                                                                                            iter_data, folder_name)
 
@@ -774,63 +665,6 @@ class CoCo(Solver):
         print("success? {}".format(prob_success))
         total_time = solve_time + time_rf
         # End: shared setup
-
-        # # Begin: multiple setup
-        # total_time = 0
-        # for ii, idx in enumerate(ind_max):
-        #     print("====================== Running iteration {} =====================".format(ii))
-        #
-        #     y_guess = y_guesses[ii]
-        #
-        #     print("y guesses:")
-        #     print(y_guess)
-        #
-        #     # self.print_policy_choice(y_guess, num_of_item=3)
-        #
-        #     bin_width = prob_params['bin_width']
-        #     bin_height = prob_params['bin_height']
-        #     num_of_item = prob_params['num_of_item']
-        #
-        #     bin_left = -bin_width / 2.0
-        #     bin_right = bin_width / 2.0
-        #     bin_ground = 0.0
-        #     bin_up = bin_height
-        #
-        #     v_bin = np.array([[bin_right, bin_up],
-        #                       [bin_right, bin_ground],
-        #                       [bin_left, bin_ground],
-        #                       [bin_left, bin_up]])
-        #
-        #     item_width_stored = features['item_width_stored']
-        #     item_height_stored = features['item_height_stored']
-        #     x_stored = features['item_center_x_stored']
-        #     y_stored = features['item_center_y_stored']
-        #     item_center_stored = np.array([[x_stored[iter_item], y_stored[iter_item]]
-        #                                    for iter_item in range(num_of_item)])  # Make item center 2D
-        #     item_angle_stored = features['item_angle_stored']
-        #     item_width_in_hand = features['item_width_in_hand']
-        #     item_height_in_hand = features['item_height_in_hand']
-        #
-        #     # prob_success = False
-        #     # cost = 0
-        #     # optvals = 0
-        #
-        #     begin_time = time.time()
-        #     # try:
-        #     prob_success, cost, solve_time, optvals = fcn_mode_clustered_solver_pinned(bin_width, bin_height,
-        #             bin_left, bin_right, bin_ground, bin_up, v_bin, num_of_item, item_width_stored, item_height_stored,
-        #             item_center_stored, item_angle_stored, item_width_in_hand, item_height_in_hand, y_guess, iter_data, folder_name)
-        #
-        #     # except:
-        #     #     pass
-        #     pass_time_with_runpy = time.time() - begin_time
-        #
-        #     print("success? {}".format(prob_success))
-        #     total_time += pass_time_with_runpy
-        #     n_evals = ii+1
-        #     if prob_success:
-        #         break
-        # # End: multiple setup
 
         return prob_success, cost, total_time, n_evals, optvals
 
