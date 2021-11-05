@@ -12,11 +12,13 @@ from torch.autograd import Variable
 from torch.nn import Sigmoid
 from datetime import datetime
 from xgboost import XGBRFClassifier
+
 sys.path.insert(1, os.environ['PWD'])
 sys.path.insert(1, os.path.join(os.environ['PWD'], 'pytorch'))
 sys.path.insert(1, os.path.join(os.environ['PWD'], 'book_problem'))
 sys.path.insert(1, os.path.join(os.path.dirname(os.environ['PWD']), 'bookshelf_generator'))
 sys.path.insert(1, os.path.join(os.path.dirname(os.environ['PWD']), 'utils'))
+
 from core import Problem, Solver
 from pytorch.models import FFNet
 from pytorch.vae import VAE
@@ -68,7 +70,6 @@ class CoCo(Solver):
         self.Y = train_data[3]
         features = train_data[1]
         self.num_train = len(self.Y)
-
         num_probs = self.num_train
 
         self.n_y = self.Y[0].size
@@ -79,11 +80,10 @@ class CoCo(Solver):
             assert self.n_features == len(ff), "From construct strategies: Inconsistent length of feature vector !!"
             self.features[iter_prob, :] = np.array(ff)
 
-        self.labels = np.zeros((num_probs, 1+self.n_y))
+        self.labels = np.zeros((num_probs, 1+self.n_y))  # Add one dimension for policy ID
         self.n_strategies = 0
 
         for iter_prob in range(num_probs):
-            # TODO(acauligi): check if transpose necessary with new pickle save format for Y
             y_true = self.Y[iter_prob, :]
 
             if tuple(y_true) not in self.strategy_dict.keys():
@@ -159,7 +159,6 @@ class CoCo(Solver):
         assert network == "CoCo" or network == "VAE", "Unknown neural network !!!"
 
         # grab training params
-        BATCH_SIZE = self.training_params['BATCH_SIZE']
         TRAINING_ITERATIONS = self.training_params['TRAINING_ITERATIONS']
         BATCH_SIZE = self.training_params['BATCH_SIZE']
         CHECKPOINT_AFTER = self.training_params['CHECKPOINT_AFTER']
@@ -202,7 +201,7 @@ class CoCo(Solver):
             random.shuffle(rand_idx)
 
             # Sample all data points
-            indices = [rand_idx[ii * BATCH_SIZE:(ii + 1) * BATCH_SIZE] for ii in range((len(rand_idx) + BATCH_SIZE - 1) // BATCH_SIZE)]
+            indices = [rand_idx[ii * BATCH_SIZE:(ii + 1) * BATCH_SIZE] for ii in range((len(rand_idx) + BATCH_SIZE - 1) // BATCH_SIZE)]  # 250 x 20 (batch size)
 
             for ii, idx in enumerate(indices):
                 # zero the parameter gradients
@@ -258,6 +257,7 @@ class CoCo(Solver):
                 # print statistics\n",
                 running_loss += loss.item()
                 if itr % CHECKPOINT_AFTER == 0:
+                    # TODO: should here be a model.eval() then model.train() ?
                     # rand_idx = list(np.arange(0, X.shape[0]-1))  # Why is there a -1 here?
                     rand_idx = list(np.arange(0, X.shape[0]))
                     random.shuffle(rand_idx)
@@ -313,7 +313,7 @@ class CoCo(Solver):
 
                 itr += 1
 
-            verbose and print('Done with epoch {} in {}s'.format(epoch, time.time()-t0))
+            print('Done with epoch {} in {}s'.format(epoch, time.time()-t0))
 
         if network == "CoCo":
             torch.save(model.state_dict(), self.model_fn)
@@ -526,7 +526,6 @@ class CoCo(Solver):
 
         return list_prob_success, list_cost, list_total_time, list_n_evals, list_optvals
 
-
     def forward_book_VAE(self, prob_params, features, iter_data, num_trials, folder_name):
 
         feature_input = np.array(features.flatten())
@@ -589,7 +588,6 @@ class CoCo(Solver):
                 break
 
         return prob_success, cost, total_time, n_evals, optvals
-
 
     def forward_book_random_forest(self, prob_params, features, iter_data, num_trials, folder_name):
 
